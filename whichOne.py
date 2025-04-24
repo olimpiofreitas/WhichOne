@@ -710,7 +710,7 @@ def display_top_programs(programs, count=10, only_rewards=True):
 
 def display_program_scope(program_name, data):
     """Exibe todos os domínios do escopo de um programa específico"""
-    print(f"{Fore.GREEN}Buscando escopo do programa: {program_name}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}🔍 Buscando escopo do programa: {Fore.YELLOW}{program_name}{Style.RESET_ALL}")
     
     # Procura o programa
     target_program = None
@@ -720,11 +720,13 @@ def display_program_scope(program_name, data):
             break
     
     if not target_program:
-        print(f"{Fore.RED}Programa '{program_name}' não encontrado.{Style.RESET_ALL}")
+        print(f"{Fore.RED}❌ Programa '{program_name}' não encontrado.{Style.RESET_ALL}")
         return
     
-    print(f"\n{Fore.GREEN}=== Escopo do Programa: {target_program['name']} ==={Style.RESET_ALL}")
-    print(f"{Fore.GREEN}URL do Programa: {target_program.get('program_url', 'Não disponível')}{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}═══════════════════════════════════════════════════════════════════════════════")
+    print(f"{Fore.CYAN}📋 Programa: {Fore.YELLOW}{target_program['name']}")
+    print(f"{Fore.CYAN}🔗 URL: {Fore.YELLOW}{target_program.get('program_url', 'Não disponível')}")
+    print(f"{Fore.CYAN}═══════════════════════════════════════════════════════════════════════════════{Style.RESET_ALL}")
     
     # Obtém os domínios
     if target_program.get("URL"):
@@ -733,7 +735,7 @@ def display_program_scope(program_name, data):
         current_domains = extract_domains(target_program)
     
     if not current_domains:
-        print(f"{Fore.YELLOW}Nenhum domínio encontrado no escopo.{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}⚠️ Nenhum domínio encontrado no escopo.{Style.RESET_ALL}")
         return
     
     # Limpa domínios duplicados e www
@@ -755,38 +757,52 @@ def display_program_scope(program_name, data):
             regular_domains.append(domain)
     
     # Exibe estatísticas
-    print(f"\n{Fore.GREEN}Estatísticas do Escopo:{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}- Total de domínios: {len(cleaned_domains)}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}- Domínios com wildcard: {len(wildcard_domains)}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}- Domínios regulares: {len(regular_domains)}{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}📊 Estatísticas do Escopo:{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}├─ Total de domínios: {Fore.YELLOW}{len(cleaned_domains)}")
+    print(f"{Fore.CYAN}├─ Domínios com wildcard: {Fore.YELLOW}{len(wildcard_domains)}")
+    print(f"{Fore.CYAN}└─ Domínios regulares: {Fore.YELLOW}{len(regular_domains)}{Style.RESET_ALL}")
     
     # Exibe domínios com wildcard
     if wildcard_domains:
-        print(f"\n{Fore.GREEN}=== Domínios com Wildcard ==={Style.RESET_ALL}")
+        print(f"\n{Fore.CYAN}═══════════════════════════════════════════════════════════════════════════════")
+        print(f"{Fore.CYAN}🌟 Domínios com Wildcard ({len(wildcard_domains)}):{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}═══════════════════════════════════════════════════════════════════════════════")
         for domain in wildcard_domains:
-            print(f"{Fore.GREEN}* {domain}{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}  * {domain}{Style.RESET_ALL}")
     
     # Exibe domínios regulares
     if regular_domains:
-        print(f"\n{Fore.GREEN}=== Domínios Regulares ==={Style.RESET_ALL}")
+        print(f"\n{Fore.CYAN}═══════════════════════════════════════════════════════════════════════════════")
+        print(f"{Fore.CYAN}🌐 Domínios Regulares ({len(regular_domains)}):{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}═══════════════════════════════════════════════════════════════════════════════")
         for domain in regular_domains:
-            print(f"{Fore.GREEN}  {domain}{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}    {domain}{Style.RESET_ALL}")
     
-    # Salva o escopo em um arquivo
-    scope_file = os.path.join(OUTPUT_DIR, f"{target_program['name']}_scope.txt")
+    # Salva o escopo em arquivos separados
     try:
+        # Salva domínios regulares
+        scope_file = os.path.join(OUTPUT_DIR, f"{target_program['name']}_scope.txt")
         with open(scope_file, 'w', encoding='utf-8') as f:
             f.write(f"=== Escopo do Programa: {target_program['name']} ===\n")
             f.write(f"URL: {target_program.get('program_url', 'Não disponível')}\n")
-            f.write(f"\n=== Domínios com Wildcard ===\n")
-            for domain in wildcard_domains:
-                f.write(f"{domain}\n")
             f.write(f"\n=== Domínios Regulares ===\n")
             for domain in regular_domains:
                 f.write(f"{domain}\n")
-        print(f"\n{Fore.GREEN}Escopo salvo em: {scope_file}{Style.RESET_ALL}")
+        print(f"\n{Fore.CYAN}💾 Escopo regular salvo em: {Fore.YELLOW}{scope_file}{Style.RESET_ALL}")
+        
+        # Salva domínios com wildcard em arquivo separado
+        if wildcard_domains:
+            wildcard_file = os.path.join(OUTPUT_DIR, f"{target_program['name']}_wildcard.txt")
+            with open(wildcard_file, 'w', encoding='utf-8') as f:
+                f.write(f"=== Wildcards do Programa: {target_program['name']} ===\n")
+                f.write(f"URL: {target_program.get('program_url', 'Não disponível')}\n")
+                f.write(f"\n=== Domínios com Wildcard ===\n")
+                for domain in wildcard_domains:
+                    f.write(f"{domain}\n")
+            print(f"{Fore.CYAN}💾 Wildcards salvo em: {Fore.YELLOW}{wildcard_file}{Style.RESET_ALL}")
+            
     except Exception as e:
-        print(f"{Fore.YELLOW}Aviso: Erro ao salvar arquivo de escopo: {e}{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}⚠️ Aviso: Erro ao salvar arquivos de escopo: {e}{Style.RESET_ALL}")
 
 def main():
     args = parse_arguments()
