@@ -142,8 +142,8 @@ def check_new_subdomains(program):
 def download_and_compare_domains(url, program_name):
     """Baixa e compara domínios do arquivo com versão anterior"""
     try:
-        print(f"{Fore.CYAN}Baixando arquivo de domínios...{Style.RESET_ALL}")
-        response = requests.get(url)
+        print(f"{Fore.CYAN}Baixando arquivo de domínios para {program_name}...{Style.RESET_ALL}")
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
         
         # Cria diretório para cache se não existir
@@ -201,8 +201,9 @@ def download_and_compare_domains(url, program_name):
             except Exception as e:
                 print(f"{Fore.YELLOW}Aviso: Erro ao ler cache: {e}{Style.RESET_ALL}")
         
-        # Identifica novos domínios
+        # Identifica novos domínios e domínios removidos
         new_domains = current_domains - previous_domains
+        removed_domains = previous_domains - current_domains
         
         # Salva domínios atuais no cache
         try:
@@ -212,12 +213,35 @@ def download_and_compare_domains(url, program_name):
         except Exception as e:
             print(f"{Fore.YELLOW}Aviso: Erro ao salvar cache: {e}{Style.RESET_ALL}")
         
+        # Cria um arquivo de log com as mudanças
+        log_file = os.path.join(cache_dir, f"{program_name}_changes.log")
+        try:
+            with open(log_file, 'a', encoding='utf-8') as f:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"\n=== Mudanças em {timestamp} ===\n")
+                if new_domains:
+                    f.write("\nNovos domínios:\n")
+                    for domain in sorted(new_domains):
+                        f.write(f"+ {domain}\n")
+                if removed_domains:
+                    f.write("\nDomínios removidos:\n")
+                    for domain in sorted(removed_domains):
+                        f.write(f"- {domain}\n")
+                f.write(f"\nTotal atual: {len(current_domains)} domínios\n")
+                f.write("="*50 + "\n")
+        except Exception as e:
+            print(f"{Fore.YELLOW}Aviso: Erro ao salvar log de mudanças: {e}{Style.RESET_ALL}")
+        
         print(f"{Fore.GREEN}Domínios extraídos e comparados com sucesso!{Style.RESET_ALL}")
-        return sorted(list(current_domains)), sorted(list(new_domains))
+        print(f"- Total de domínios: {len(current_domains)}")
+        print(f"- Novos domínios: {len(new_domains)}")
+        print(f"- Domínios removidos: {len(removed_domains)}")
+        
+        return sorted(list(current_domains)), sorted(list(new_domains)), sorted(list(removed_domains))
             
     except Exception as e:
         print(f"{Fore.RED}Erro ao baixar/processar domínios: {e}{Style.RESET_ALL}")
-        return [], []
+        return [], [], []
 
 def download_and_extract_domains(url):
     """Baixa e extrai domínios do arquivo"""
@@ -434,6 +458,8 @@ def parse_arguments():
                         help='Ordenar por: launch (data de entrada na HackerOne), update (data de atualização), added (data de adição na lista)')
     parser.add_argument('-p', '--program', type=str,
                         help='Filtrar por nome do programa (ex: -p Snapchat)')
+    parser.add_argument('-scope', type=str,
+                        help='Exibir todos os domínios do escopo de um programa específico (ex: -scope airbnb)')
     return parser.parse_args()
 
 def filter_hackerone_rewards(data, only_rewards=True, top_count=None, program_name=None):
@@ -474,14 +500,16 @@ def filter_hackerone_rewards(data, only_rewards=True, top_count=None, program_na
                 
                 # Extrai domínios e compara com versão anterior
                 if program.get("URL"):
-                    current_domains, new_domains = download_and_compare_domains(program["URL"], program["name"])
+                    current_domains, new_domains, removed_domains = download_and_compare_domains(program["URL"], program["name"])
                     program["extracted_domains"] = current_domains
                     program["new_domains"] = new_domains
-                    if new_domains:
+                    program["removed_domains"] = removed_domains
+                    if new_domains or removed_domains:
                         program["last_scope_update"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 else:
                     program["extracted_domains"] = extract_domains(program)
                     program["new_domains"] = []
+                    program["removed_domains"] = []
                 
                 # Corrige o problema de datas iguais
                 if not program.get("last_updated") or program.get("last_updated") == "1970-01-01":
@@ -526,6 +554,7 @@ def format_program_info(program):
     payment_details = program.get("payment_details", {})
     date_info = program.get("date_info", {})
     new_domains = program.get("new_domains", [])
+    removed_domains = program.get("removed_domains", [])
     last_scope_update = program.get("last_scope_update", "")
     is_new = program.get("is_new", False)
     
@@ -551,13 +580,22 @@ def format_program_info(program):
     update_date = date_info.get("update_date", "Data não disponível")
     
     # Adiciona informação sobre novos domínios
-    new_domains_info = ""
-    if new_domains:
-        new_domains_str = "\n".join(f"  - {domain}" for domain in new_domains)
-        new_domains_info = f"""
-{Fore.YELLOW}Novos domínios adicionados em {last_scope_update}:{Style.RESET_ALL}
-{new_domains_str}
-"""
+    domains_info = ""
+    if new_domains or removed_domains:
+        domains_info = f"\n{Fore.CYAN}Mudanças no escopo:{Style.RESET_ALL}"
+        if new_domains:
+            domains_info += f"\n{Fore.GREEN}Novos domínios adicionados ({len(new_domains)}):{Style.RESET_ALL}"
+            for domain in new_domains[:5]:  # Mostra apenas os 5 primeiros
+                domains_info += f"\n  + {domain}"
+            if len(new_domains) > 5:
+                domains_info += f"\n  ... e mais {len(new_domains) - 5} domínios"
+        
+        if removed_domains:
+            domains_info += f"\n{Fore.RED}Domínios removidos ({len(removed_domains)}):{Style.RESET_ALL}"
+            for domain in removed_domains[:5]:  # Mostra apenas os 5 primeiros
+                domains_info += f"\n  - {domain}"
+            if len(removed_domains) > 5:
+                domains_info += f"\n  ... e mais {len(removed_domains) - 5} domínios"
     
     # Adiciona informação sobre programa novo
     new_program_info = ""
@@ -572,7 +610,7 @@ def format_program_info(program):
 {Fore.CYAN}Status:{Style.RESET_ALL} {payment_status}
 {Fore.CYAN}{reward_info}{Style.RESET_ALL}
 {Fore.CYAN}Última Atualização:{Style.RESET_ALL} {update_date}
-{new_domains_info}"""
+{domains_info}"""
     return formatted_info
 
 def sort_by_date(hackerone_programs, use_launch_date=True):
@@ -670,6 +708,86 @@ def display_top_programs(programs, count=10, only_rewards=True):
         print(f"\n{Fore.GREEN}{i}. {prog.get('name', '')}{Style.RESET_ALL}")
         print(format_program_info(prog))
 
+def display_program_scope(program_name, data):
+    """Exibe todos os domínios do escopo de um programa específico"""
+    print(f"{Fore.GREEN}Buscando escopo do programa: {program_name}{Style.RESET_ALL}")
+    
+    # Procura o programa
+    target_program = None
+    for program in data:
+        if program_name.lower() in program.get("name", "").lower():
+            target_program = program
+            break
+    
+    if not target_program:
+        print(f"{Fore.RED}Programa '{program_name}' não encontrado.{Style.RESET_ALL}")
+        return
+    
+    print(f"\n{Fore.GREEN}=== Escopo do Programa: {target_program['name']} ==={Style.RESET_ALL}")
+    print(f"{Fore.GREEN}URL do Programa: {target_program.get('program_url', 'Não disponível')}{Style.RESET_ALL}")
+    
+    # Obtém os domínios
+    if target_program.get("URL"):
+        current_domains, _, _ = download_and_compare_domains(target_program["URL"], target_program["name"])
+    else:
+        current_domains = extract_domains(target_program)
+    
+    if not current_domains:
+        print(f"{Fore.YELLOW}Nenhum domínio encontrado no escopo.{Style.RESET_ALL}")
+        return
+    
+    # Limpa domínios duplicados e www
+    cleaned_domains = set()
+    for domain in current_domains:
+        # Remove www duplicado
+        if domain.startswith('www.www.'):
+            domain = domain[4:]  # Remove o primeiro 'www.'
+        cleaned_domains.add(domain)
+    
+    # Separa domínios com wildcard
+    wildcard_domains = []
+    regular_domains = []
+    
+    for domain in sorted(cleaned_domains):
+        if '*' in domain:
+            wildcard_domains.append(domain)
+        else:
+            regular_domains.append(domain)
+    
+    # Exibe estatísticas
+    print(f"\n{Fore.GREEN}Estatísticas do Escopo:{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}- Total de domínios: {len(cleaned_domains)}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}- Domínios com wildcard: {len(wildcard_domains)}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}- Domínios regulares: {len(regular_domains)}{Style.RESET_ALL}")
+    
+    # Exibe domínios com wildcard
+    if wildcard_domains:
+        print(f"\n{Fore.GREEN}=== Domínios com Wildcard ==={Style.RESET_ALL}")
+        for domain in wildcard_domains:
+            print(f"{Fore.GREEN}* {domain}{Style.RESET_ALL}")
+    
+    # Exibe domínios regulares
+    if regular_domains:
+        print(f"\n{Fore.GREEN}=== Domínios Regulares ==={Style.RESET_ALL}")
+        for domain in regular_domains:
+            print(f"{Fore.GREEN}  {domain}{Style.RESET_ALL}")
+    
+    # Salva o escopo em um arquivo
+    scope_file = os.path.join(OUTPUT_DIR, f"{target_program['name']}_scope.txt")
+    try:
+        with open(scope_file, 'w', encoding='utf-8') as f:
+            f.write(f"=== Escopo do Programa: {target_program['name']} ===\n")
+            f.write(f"URL: {target_program.get('program_url', 'Não disponível')}\n")
+            f.write(f"\n=== Domínios com Wildcard ===\n")
+            for domain in wildcard_domains:
+                f.write(f"{domain}\n")
+            f.write(f"\n=== Domínios Regulares ===\n")
+            for domain in regular_domains:
+                f.write(f"{domain}\n")
+        print(f"\n{Fore.GREEN}Escopo salvo em: {scope_file}{Style.RESET_ALL}")
+    except Exception as e:
+        print(f"{Fore.YELLOW}Aviso: Erro ao salvar arquivo de escopo: {e}{Style.RESET_ALL}")
+
 def main():
     args = parse_arguments()
     
@@ -678,6 +796,11 @@ def main():
     # Obtendo os dados
     data = fetch_programs()
     if not data:
+        return
+
+    # Se o modo -scope foi especificado, exibe o escopo e sai
+    if args.scope:
+        display_program_scope(args.scope, data)
         return
 
     # Filtrando programas da HackerOne
